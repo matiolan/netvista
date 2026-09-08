@@ -1,47 +1,29 @@
-export default function Page() {
-  return (
-    <main
-      style={{
-        colorScheme: 'light dark',
-        position: 'relative',
-        display: 'flex',
-        minHeight: '100vh',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'light-dark(#fff, #000)',
-        color: 'light-dark(#000, #fff)',
-      }}
-    >
-      <svg
-        aria-hidden="true"
-        style={{ width: 80, height: 80 }}
-        width={80}
-        height={80}
-        fill="none"
-        viewBox="0 0 20 20"
-        xmlns="http://www.w3.org/2000/svg"
-        stroke="currentColor"
-        strokeWidth="0.5"
-      >
-        <path
-          d="M14.2 14.2H17V6.9375C17 4.76288 15.2371 3 13.0625 3H5.8V5.8M14.2 14.2V7.79063L7.79062 14.2H14.2ZM14.2 14.2V17H6.9375C4.76288 17 3 15.2371 3 13.0625V5.8H5.8M5.8 5.8V12.2313L12.2313 5.8H5.8Z"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <p
-        style={{
-          position: 'absolute',
-          left: '50%',
-          top: 'calc(50% + 56px)',
-          transform: 'translateX(-50%)',
-          whiteSpace: 'nowrap',
-          fontSize: '14px',
-          fontWeight: 500,
-          color: 'light-dark(#71717a, #a1a1aa)',
-        }}
-      >
-        Your v0 generation will show here.
-      </p>
-    </main>
-  )
+'use client'
+import { useMemo, useRef, useState } from 'react'
+import { AlertCircle, Boxes, Radio, Server, Activity, ShieldCheck } from 'lucide-react'
+import { AlertCenter, AlertRules } from '@/components/alert_center'
+import { IncidentHistory } from '@/components/incident_history'
+import { KpiDashboard } from '@/components/kpi_dashboard'
+import { NetworkSearch, SearchBar, SearchExamples, QuickAccess, Header, Footer } from '@/components/search_bar'
+import { TopologyMap, TopologyNodeDetails } from '@/components/topology_map'
+import { equipmentMock, IncidentEngine, type Equipment } from '@/lib/incident_engine'
+import { filterEquipment } from '@/components/network_search'
+
+export default function Page(){
+ const [equipment,setEquipment]=useState(equipmentMock);const [query,setQuery]=useState('');const [results,setResults]=useState<Equipment[]>([]);const [loading,setLoading]=useState(false);const [expanded,setExpanded]=useState<string|null>(null);const [selected,setSelected]=useState<Equipment|null>(null);const [alerts,setAlerts]=useState<any[]>([]);const [incidents,setIncidents]=useState<any[]>([]);const engine=useRef(new IncidentEngine()).current
+ const runSearch=()=>{setLoading(true);setTimeout(()=>{setResults(filterEquipment(equipment,query));setLoading(false)},650)}
+ const simulate=()=>{const target=equipment[Math.floor(Math.random()*equipment.length)];const alert=engine.simulateFault(target.id,target.nombre);setAlerts(engine.getAlerts());setEquipment(equipment.map(e=>e.id===target.id?{...e,estado:alert.severidad==='critical'?'caído':'advertencia'}:e))}
+ const diagnose=(id:string)=>{engine.startDiagnosis(id);setAlerts(engine.getAlerts())};const resolve=(id:string)=>{engine.resolveIncident(id);setAlerts(engine.getAlerts());setIncidents(engine.getIncidents())}
+ const kpis=engine.calculateKPIs();const online=equipment.filter(e=>e.estado==='operativo').length;const avgLatency=Math.round(equipment.reduce((a,e)=>a+e.latencia,0)/equipment.length)
+ const nav=(id:string)=>document.getElementById(id)?.scrollIntoView({behavior:'smooth'})
+ return <div className="min-h-screen bg-background"><Header/><main className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6"><section className="rounded-2xl border border-primary/20 bg-card p-6 md:p-8"><div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between"><div><p className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-primary"><span className="h-2 w-2 animate-pulse rounded-full bg-primary"/>NOC · Monitoreo en vivo</p><h1 className="max-w-2xl text-balance text-3xl font-black tracking-tight md:text-5xl">Control total sobre tu red FTTH.</h1><p className="mt-4 max-w-xl text-sm leading-6 text-muted-foreground">Supervisa routers MikroTik y OLTs GPON, detecta fallas antes de que afecten a tus clientes y mide el desempeño de tu operación.</p></div><div className="grid grid-cols-3 gap-2"><Metric icon={<Server/>} value={`${online}/${equipment.length}`} label="equipos OK"/><Metric icon={<Activity/>} value={`${avgLatency}ms`} label="latencia media"/><Metric icon={<ShieldCheck/>} value="99.98%" label="disponibilidad"/></div></div><div className="mt-7"><QuickAccess onClick={nav}/></div></section>
+ <section className="space-y-3"><SearchBar value={query} onChange={setQuery} onSearch={runSearch} loading={loading}/><SearchExamples onSelect={(v)=>{setQuery(v);setResults(filterEquipment(equipment,v))}}/></section>
+ <section className="grid gap-4 md:grid-cols-3"><StatusCard icon={<Boxes/>} label="Routers MikroTik" value={equipment.filter(e=>e.tipo==='router').length} tone="blue"/><StatusCard icon={<Radio/>} label="OLTs GPON" value={equipment.filter(e=>e.tipo==='olt').length} tone="green"/><StatusCard icon={<AlertCircle/>} label="Alertas activas" value={alerts.filter(a=>a.status!=='resuelta').length} tone="amber"/></section>
+ <section><div className="mb-4 flex items-end justify-between"><div><h2 className="text-xl font-bold">Resultados de búsqueda</h2><p className="mt-1 text-sm text-muted-foreground">Consulta el estado actual de los equipos conectados.</p></div></div><NetworkSearch results={results} expanded={expanded} onToggle={(id)=>setExpanded(expanded===id?null:id)}/></section>
+ <section id="topology" className="scroll-mt-6"><div className="mb-4"><h2 className="text-xl font-bold">Topología de red</h2><p className="mt-1 text-sm text-muted-foreground">Mapa visual de routers y OLTs interconectados. Selecciona un nodo.</p></div><div className="grid gap-4 lg:grid-cols-[1fr_280px]"><TopologyMap equipment={equipment} onSelect={setSelected}/><TopologyNodeDetails equipment={selected}/></div></section>
+ <section id="alerts" className="scroll-mt-6 grid gap-4 lg:grid-cols-[1fr_320px]"><AlertCenter alerts={alerts} onSimulate={simulate} onDiagnose={diagnose} onResolve={resolve}/><AlertRules/></section>
+ <section id="kpis" className="scroll-mt-6 grid gap-4 lg:grid-cols-[1fr_380px]"><KpiDashboard mttd={kpis.avgMttd} mttr={kpis.avgMttr} incidents={incidents}/><IncidentHistory incidents={incidents}/></section>
+ </main><Footer/></div>
 }
+function Metric({icon,value,label}:{icon:React.ReactNode;value:string;label:string}){return <div className="rounded-xl border border-border bg-muted/20 p-3 text-center"><div className="mb-2 flex justify-center text-primary">{icon}</div><p className="text-lg font-black">{value}</p><p className="text-[10px] text-muted-foreground">{label}</p></div>}
+function StatusCard({icon,label,value,tone}:{icon:React.ReactNode;label:string;value:number;tone:string}){return <div className="flex items-center gap-4 rounded-xl border border-border bg-card p-5"><div className={`rounded-lg p-3 ${tone==='blue'?'bg-primary/10 text-primary':tone==='green'?'bg-emerald-400/10 text-emerald-400':'bg-amber-400/10 text-amber-400'}`}>{icon}</div><div><p className="text-2xl font-black">{value}</p><p className="text-xs text-muted-foreground">{label}</p></div></div>}
